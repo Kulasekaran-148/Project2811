@@ -23,7 +23,7 @@ export async function renderTeacherHome(ctx, view) {
   const studentId = await ctx.store.getStudentId();
   const d = await loadStudentData(ctx.store, studentId);
   const today = localDay();
-  const todays = d.lessons.find((l) => localDay(new Date(l.created_at)) === today);
+  const todays = d.lessons.findLast((l) => localDay(new Date(l.created_at)) === today);
   const nextDay = (d.lessons.at(-1)?.day_number || 0) + 1;
   const topic = topicForDay(nextDay);
 
@@ -143,19 +143,19 @@ export async function renderEditor(ctx, view, lessonId) {
       <li class="item ${it.word ? '' : 'empty'}" data-i="${i}">
         <div class="item-head">
           <span class="num">${i + 1}</span>
-          <button class="link danger" data-rm="${i}" aria-label="Remove word ${i + 1}">Remove</button>
+          <button type="button" class="link danger" data-rm="${i}" aria-label="Remove word ${i + 1}">Remove</button>
         </div>
         <label>Meaning in English <input name="meaning" value="${esc(it.meaning)}" placeholder="e.g. Elder sister"></label>
         <label>In Sourashtra <input name="word" value="${esc(it.word)}" placeholder="Spell it your way" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
         <div class="rec">
-          ${isRec ? `<button class="btn rec-on" data-stop="${i}">Stop <span class="t">0:00</span></button>`
+          ${isRec ? `<button type="button" class="btn rec-on" data-stop="${i}">Stop <span class="t">0:00</span></button>`
             : hasAudio ? `
-              <button class="play" data-local="${i}" aria-label="Play recording"></button>
+              <button type="button" class="play" data-local="${i}" aria-label="Play recording"></button>
               <span class="ok small">Recorded</span>
-              <button class="btn sm ghost" data-record="${i}">Record again</button>
-              <button class="link danger small" data-noaudio="${i}">Delete</button>`
+              <button type="button" class="btn sm ghost" data-record="${i}">Record again</button>
+              <button type="button" class="link danger small" data-noaudio="${i}">Delete</button>`
             : `
-              <button class="btn rec-btn" data-record="${i}" ${canRecord() ? '' : 'disabled'}>Record</button>
+              <button type="button" class="btn rec-btn" data-record="${i}" ${canRecord() ? '' : 'disabled'}>Record</button>
               <label class="btn sm ghost file">Upload audio<input type="file" accept="audio/*" data-upload="${i}" hidden></label>`}
         </div>
         <details ${filled ? 'open' : ''}>
@@ -173,10 +173,11 @@ export async function renderEditor(ctx, view, lessonId) {
   function render() {
     view.innerHTML = `
       <form class="panel editor" id="ed" novalidate>
-        <div class="head-row">
-          <h1>${lessonId ? 'Edit' : 'New'} lesson · Day <input name="day_number" class="day-in" type="number" min="1" value="${lesson.day_number}" aria-label="Day number"></h1>
+        <h1>${lessonId ? 'Edit lesson' : "Today's lesson"}</h1>
+        <div class="title-row">
+          <label>Day <input name="day_number" type="number" min="1" inputmode="numeric" value="${lesson.day_number}"></label>
+          <label>Title <input name="title" value="${esc(lesson.title)}" required></label>
         </div>
-        <label>Title <input name="title" value="${esc(lesson.title)}" required></label>
         <label>Note to your friend <textarea name="intro" rows="2" placeholder="Optional. Shown before the lesson starts.">${esc(lesson.intro)}</textarea></label>
         ${lessonId ? '' : `<p class="muted small">Suggested words are filled in below. Fill in the ones you want, remove the rest, or add your own. Rows without a Sourashtra word are skipped.</p>`}
         <ol class="items">${items.map(itemHTML).join('')}</ol>
