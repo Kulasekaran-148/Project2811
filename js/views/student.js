@@ -84,6 +84,7 @@ export function progressSections(d, { title }) {
         <div><b>${d.learned.length}</b><span>words learned</span></div>
         <div><b>${d.xpTotal}</b><span>total XP</span></div>
         <div><b>${d.accuracy ?? '–'}${d.accuracy == null ? '' : '%'}</b><span>accuracy</span></div>
+        <div><b>${d.skips}</b><span>times skipped</span></div>
       </div>
       <h3>Last 4 weeks</h3>
       <div class="cal" aria-label="Days practised in the last 4 weeks">
@@ -103,8 +104,8 @@ export function progressSections(d, { title }) {
           return `<li>
             ${i.audio_path ? `<button class="play sm" data-audio="${esc(i.audio_path)}" aria-label="Play ${esc(i.word)}"></button>` : '<span class="play-gap"></span>'}
             <span class="w">${esc(i.word)}</span>
-            <span class="m">${esc(i.meaning)}</span>
-            <span class="str s${s}" title="Strength ${s} of 4 · ${p.correct} right, ${p.wrong} wrong"><i></i><i></i><i></i><i></i></span>
+            <span class="m">${esc(i.meaning)}${p.skipped ? `<small class="skips">skipped ${p.skipped}×</small>` : ''}</span>
+            <span class="str s${s}" title="Strength ${s} of 4 · ${p.correct} right, ${p.wrong} wrong, ${p.skipped || 0} skipped"><i></i><i></i><i></i><i></i></span>
           </li>`;
         }).join('')}</ul>`).join('') : `<p class="muted">Words show up here after the first lesson.</p>`}
     </section>`;

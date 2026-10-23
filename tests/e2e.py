@@ -11,6 +11,7 @@ server = subprocess.Popen([sys.executable, '-m', 'http.server', '8765'], cwd=ROO
 time.sleep(1)
 errors = []
 shot_n = [0]
+skips = [0]
 
 def shot(page, name):
     shot_n[0] += 1
@@ -35,6 +36,8 @@ def run_session(page, label, answer_well=True):
             continue
         if page.locator('[name=answer]').count():
             if 'type' not in took: shot(page, f'{label}-type'); took.add('type')
+            if 'skipped' not in took:
+                took.add('skipped'); skips[0] += 1; page.click('[data-skip]'); continue
             page.fill('[name=answer]', 'zzz'); page.click('[data-check]'); continue
         if page.locator('[data-opt]').count():
             key = 'opt-' + kicker[:12]
@@ -51,11 +54,17 @@ with sync_playwright() as p:
     browser = p.chromium.launch(args=['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'])
     ctx = browser.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2,
                               permissions=['microphone'])
+    ctx.add_init_script("""
+      window.__autoplays = 0;
+      const orig = HTMLMediaElement.prototype.play;
+      HTMLMediaElement.prototype.play = function () { if (!window.__userPlay) window.__autoplays++; return orig.call(this); };
+      document.addEventListener('click', e => { window.__userPlay = !!e.target.closest('[data-audio],[data-local]'); setTimeout(() => window.__userPlay = false, 500); }, true);
+    """)
     page = ctx.new_page()
     page.on('pageerror', lambda e: errors.append(str(e)))
     page.on('console', lambda m: m.type == 'error' and 'fonts.g' not in m.text and errors.append(m.text))
     page.on('dialog', lambda d: d.accept())
-    page.goto('http://localhost:8765/')
+    page.goto('http://localhost:8765/?demo')
     page.wait_for_selector('text=Write today')
     shot(page, 'teacher-today')
 
@@ -83,7 +92,7 @@ with sync_playwright() as p:
         page.fill(f'[data-i="{i}"] input[name=word]', w)
     page.click('button:has-text("Save lesson")')
     page.wait_for_selector('text=Today\'s lesson is in')
-    page.goto('http://localhost:8765/#/lessons'); page.wait_for_selector('.lesson-admin')
+    page.goto('http://localhost:8765/?demo#/lessons'); page.wait_for_selector('.lesson-admin')
     shot(page, 'teacher-lessons')
 
     # Student
@@ -92,10 +101,16 @@ with sync_playwright() as p:
     shot(page, 'student-home')
     page.click('text=Start lesson')
     run_session(page, 'lesson1')
+    assert page.locator('.stats span:has-text("skipped")').count() == 1, 'finish screen shows skips'
     page.click('.foot a')
     page.wait_for_selector('.goal')
     shot(page, 'student-home-after')
     page.click('#tabs a:has-text("Progress")'); page.wait_for_selector('.words')
+    assert page.locator('.words .skips').count() >= 1, 'word list shows skip count'
+    # a deliberate tap on a play button should still play
+    before = page.evaluate('window.__autoplays')
+    page.click('.words [data-audio]'); page.wait_for_timeout(300)
+    print('autoplays during lesson:', before, '| after tapping play:', page.evaluate('window.__autoplays'))
     shot(page, 'student-progress')
     page.click('#tabs a:has-text("Review")'); page.wait_for_selector('.panel h1:has-text("Review")')
     shot(page, 'student-review')
@@ -109,7 +124,7 @@ with sync_playwright() as p:
     shot(page, 'teacher-student-report')
 
     # Dark mode glance
-    page.emulate_media(color_scheme='dark'); page.goto('http://localhost:8765/#/'); page.wait_for_selector('text=Your student')
+    page.emulate_media(color_scheme='dark'); page.goto('http://localhost:8765/?demo#/'); page.wait_for_selector('text=Your student')
     shot(page, 'dark-teacher')
     browser.close()
 

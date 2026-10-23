@@ -45,6 +45,7 @@ create table if not exists progress (
   lapses int not null default 0,
   correct int not null default 0,
   wrong int not null default 0,
+  skipped int not null default 0,   -- times the student skipped typing it
   due_at timestamptz not null default now(),
   last_seen timestamptz,
   primary key (student_id, item_id)
@@ -67,6 +68,9 @@ create table if not exists completions (
   score int,                     -- % correct on first try
   completed_at timestamptz not null default now()
 );
+
+-- Added after the first release (safe to re-run).
+alter table progress add column if not exists skipped int not null default 0;
 
 -- ---------- Profile row for every new user (role defaults to student) ----------
 

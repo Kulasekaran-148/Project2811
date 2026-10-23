@@ -30,6 +30,7 @@ export async function loadStudentData(store, studentId) {
     seen: allItems.filter((i) => byItem.has(i.id)),
     learned: allItems.filter((i) => isLearned(byItem.get(i.id))),
     accuracy: accuracy(progress),
+    skips: progress.reduce((s, p) => s + (p.skipped || 0), 0),
     streak: streakFrom(activity.map((a) => a.day), today),
     xpToday: activity.filter((a) => a.day === today).reduce((s, a) => s + a.xp, 0),
     xpTotal: activity.reduce((s, a) => s + a.xp, 0),

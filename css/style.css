@@ -154,6 +154,7 @@ input.ta { font-family: var(--font-ta); }
 .stats div { background: var(--paper); border-radius: 12px; padding: 12px; display: grid; }
 .stats b { font-size: 1.7rem; line-height: 1.1; }
 .stats span { color: var(--muted); font-size: .85rem; }
+.session .stats { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); }
 .session .stats div { text-align: center; }
 
 .goal-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
@@ -194,6 +195,7 @@ input.ta { font-family: var(--font-ta); }
 .words.compact li { grid-template-columns: auto 1fr 1fr auto; }
 .words .w { font-weight: 700; }
 .words .m { color: var(--muted); }
+.words .skips { display: block; font-size: .78rem; color: var(--zari); font-weight: 600; }
 .words .score { font-size: .85rem; color: var(--muted); white-space: nowrap; }
 .lesson-h { font-size: .95rem; color: var(--muted); }
 .str { display: inline-flex; gap: 3px; }

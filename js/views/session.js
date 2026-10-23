@@ -2,7 +2,6 @@ import { esc, shuffle, localDay, toast } from '../util.js';
 import { loadStudentData } from '../stats.js';
 import { lessonQuiz, reviewQuiz, checkTyped } from '../quiz.js';
 import { newRecord, grade, isDue } from '../srs.js';
-import { playUrl } from '../recorder.js';
 
 const XP_PER_CORRECT = 10;
 const XP_LESSON_BONUS = 20;
@@ -70,12 +69,10 @@ export async function runSession(ctx, view, opts) {
   let firstTotal = 0;
   let xp = 0;
   let answered = false;
+  const skipped = new Map(); // item id -> times skipped this session
 
+  // Audio only plays when the student taps a play button (handled in app.js).
   const audioOf = (it) => it?.audio_path;
-  const play = async (it) => {
-    if (!audioOf(it)) return;
-    try { await playUrl(await store.audioUrl(it.audio_path)); } catch { /* autoplay can be blocked; the button still works */ }
-  };
 
   function frame(inner, footer = '') {
     const pct = Math.round((100 * pos) / steps.length);
@@ -125,7 +122,6 @@ export async function runSession(ctx, view, opts) {
       ${it.note ? `<p class="note">${esc(it.note)}</p>` : ''}
       ${!audioOf(it) ? `<p class="muted small">No recording for this word yet.</p>` : ''}`,
       `<button class="btn primary big" data-next>Got it</button>`);
-    play(it);
   }
 
   function showQuestion(q, retry) {
@@ -136,7 +132,7 @@ export async function runSession(ctx, view, opts) {
     if (q.kind === 'meaning') {
       body = `<div class="card-word">${audioOf(it) ? `<button class="play lg" data-audio="${esc(it.audio_path)}" aria-label="Play"></button>` : ''}<p class="big-word">${esc(it.word)}</p></div>`;
     } else if (q.kind === 'listen') {
-      body = `<div class="listen"><button class="play xl" data-audio="${esc(it.audio_path)}" aria-label="Play again"></button><p class="muted small">Tap to hear it again</p></div>`;
+      body = `<div class="listen"><button class="play xl" data-audio="${esc(it.audio_path)}" aria-label="Play again"></button><p class="muted small">Tap to hear it</p></div>`;
     } else {
       body = `<p class="big-meaning">${esc(it.meaning)}</p>`;
     }
@@ -148,7 +144,7 @@ export async function runSession(ctx, view, opts) {
         </form>
         ${it.sounds_like ? `<p class="hint">${esc(it.sounds_like)}</p>` : ''}
         ${audioOf(it) ? `<button class="btn sm ghost" data-audio="${esc(it.audio_path)}">Hear it</button>` : ''}`,
-        `<button class="btn ghost" data-giveup>Show me</button><button class="btn primary" data-check>Check</button>`);
+        `<button class="btn ghost" data-skip>Skip</button><button class="btn ghost" data-giveup>Show answer</button><button class="btn primary" data-check>Check</button>`);
       view.querySelector('[name=answer]').focus();
       return;
     }
@@ -156,7 +152,6 @@ export async function runSession(ctx, view, opts) {
     const field = q.kind === 'word' ? 'word' : 'meaning';
     frame(`${head}${body}
       <div class="options">${q.options.map((o, i) => `<button class="opt" data-opt="${esc(o.id)}"><kbd>${i + 1}</kbd>${esc(o[field])}</button>`).join('')}</div>`);
-    if (q.kind === 'meaning' || q.kind === 'listen') play(it);
   }
 
   function showMatch(q, head) {
@@ -177,7 +172,6 @@ export async function runSession(ctx, view, opts) {
         view.querySelectorAll('[data-ml]').forEach((x) => x.classList.remove('sel'));
         b.classList.add('sel');
         picked = b.dataset.ml;
-        play(q.items.find((i) => i.id === picked));
         return;
       }
       if (!picked) return;
@@ -214,7 +208,6 @@ export async function runSession(ctx, view, opts) {
     const it = q.item;
     const reveal = `<p class="reveal">${audioOf(it) ? `<button class="play sm" data-audio="${esc(it.audio_path)}" aria-label="Play"></button>` : ''}<b>${esc(it.word)}</b> means <b>${esc(it.meaning)}</b></p>`;
     feedback(correct, extra + reveal);
-    if (q.kind !== 'listen') play(it);
   }
 
   function feedback(correct, html) {
@@ -239,6 +232,7 @@ export async function runSession(ctx, view, opts) {
             <div><b>${xp}</b><span>XP earned</span></div>
             <div><b>${score}%</b><span>right first time</span></div>
             <div><b>${firstTry.size}</b><span>words practised</span></div>
+            ${skipped.size ? `<div><b>${[...skipped.values()].reduce((a, b) => a + b, 0)}</b><span>skipped</span></div>` : ''}
           </div>
           <p class="muted" id="save-status">${preview ? 'Preview only, nothing was saved.' : 'Saving…'}</p>
         </div>
@@ -250,8 +244,15 @@ export async function runSession(ctx, view, opts) {
       const status = view.querySelector('#save-status');
       try {
         const now = new Date();
-        const records = [...firstTry].map(([id, ok]) => grade(byItem.get(id) || newRecord(id, studentId), ok, now));
-        await store.saveProgress(records);
+        const records = new Map();
+        for (const [id, ok] of firstTry) records.set(id, grade(byItem.get(id) || newRecord(id, studentId), ok, now));
+        // Skips are counted on the word without changing when it's next due.
+        for (const [id, n] of skipped) {
+          const r = records.get(id) || { ...(byItem.get(id) || newRecord(id, studentId)) };
+          r.skipped = (r.skipped || 0) + n;
+          records.set(id, r);
+        }
+        await store.saveProgress([...records.values()]);
         if (lesson) await store.completeLesson({ student_id: studentId, lesson_id: lesson.id, score });
         await store.addActivity({ student_id: studentId, day: localDay(), xp, kind: lesson ? 'lesson' : 'review', lesson_id: lesson?.id ?? null });
         status.textContent = 'Progress saved.';
@@ -282,6 +283,13 @@ export async function runSession(ctx, view, opts) {
       answer(q, ok);
     } else if ('check' in b.dataset) {
       checkTypedAnswer(step.q);
+    } else if ('skip' in b.dataset && !answered) {
+      // Skipping isn't wrong: no score or review change, and the word isn't asked again.
+      answered = true;
+      const id = step.q.item.id;
+      skipped.set(id, (skipped.get(id) || 0) + 1);
+      pos++;
+      show();
     } else if ('giveup' in b.dataset) {
       view.querySelector('[name=answer]').disabled = true;
       answer(step.q, false);

@@ -29,8 +29,8 @@ export async function renderTeacherHome(ctx, view) {
 
   const struggling = d.noStudent ? [] : d.seen
     .map((i) => ({ i, p: d.byItem.get(i.id) }))
-    .filter(({ p }) => p.wrong > 0)
-    .sort((a, b) => b.p.wrong - b.p.correct - (a.p.wrong - a.p.correct))
+    .filter(({ p }) => p.wrong > 0 || p.skipped > 0)
+    .sort((a, b) => b.p.wrong + (b.p.skipped || 0) - b.p.correct - (a.p.wrong + (a.p.skipped || 0) - a.p.correct))
     .slice(0, 5);
 
   view.innerHTML = `
@@ -69,7 +69,7 @@ export async function renderTeacherHome(ctx, view) {
           <ul class="words compact">${struggling.map(({ i, p }) => `
             <li>${i.audio_path ? `<button class="play sm" data-audio="${esc(i.audio_path)}" aria-label="Play ${esc(i.word)}"></button>` : ''}
               <span class="w">${esc(i.word)}</span><span class="m">${esc(i.meaning)}</span>
-              <span class="score">${p.correct}✓ ${p.wrong}✗</span></li>`).join('')}
+              <span class="score">${p.correct}✓ ${p.wrong}✗${p.skipped ? ` · ${p.skipped} skipped` : ''}</span></li>`).join('')}
           </ul>` : ''}
         <a href="#/progress">Full report</a>`}
     </section>`;

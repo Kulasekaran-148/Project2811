@@ -15,6 +15,7 @@ export function newRecord(itemId, studentId) {
     lapses: 0,
     correct: 0,
     wrong: 0,
+    skipped: 0,
     due_at: new Date().toISOString(),
     last_seen: null,
   };
