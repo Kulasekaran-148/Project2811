@@ -1,0 +1,10 @@
+{
+  "name": "sourashtra-app",
+  "private": true,
+  "type": "module",
+  "description": "A two-person Sourashtra learning app: teacher adds daily lessons, student learns with quizzes and spaced repetition.",
+  "scripts": {
+    "test": "node --test",
+    "serve": "python3 -m http.server 8000"
+  }
+}
