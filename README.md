@@ -16,13 +16,9 @@ python3 -m http.server 8000
 ## Put it online (about 20 minutes, all free)
 
 ### 1. GitHub Pages
-1. Create a new repository on GitHub (public, or private with a paid plan) and push this folder to it:
-   ```sh
-   git remote add origin https://github.com/<you>/sourashtra-app.git
-   git push -u origin main
-   ```
+1. The code lives at https://github.com/Kulasekaran-148/Project2811. GitHub Pages needs the repo to be public on a free plan.
 2. In the repo, open **Settings → Pages**, choose **Deploy from a branch**, then **main** and **/ (root)**, and save.
-3. After a minute the app is live at `https://<you>.github.io/sourashtra-app/`. It is still in demo mode at this point.
+3. After a minute the app is live at `https://kulasekaran-148.github.io/Project2811/`. It is still in demo mode at this point.
 
 ### 2. Create the Supabase project
 1. Sign up at supabase.com and create a new project. Pick the region closest to you, for example Mumbai.
