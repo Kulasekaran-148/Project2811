@@ -21,7 +21,9 @@ export function renderSignIn(ctx, view, onSignedIn) {
     try {
       onSignedIn(await ctx.store.signIn(f.get('email').trim(), f.get('password')));
     } catch (ex) {
-      err.textContent = /invalid/i.test(ex.message) ? 'Email or password is wrong.' : ex.message;
+      err.textContent = /invalid/i.test(ex.message) ? 'Email or password is wrong.'
+        : /failed to fetch|network/i.test(ex.message) ? "Can't reach the server. Check your internet connection, then try again."
+        : ex.message;
       err.hidden = false;
       btn.disabled = false;
     }
