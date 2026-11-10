@@ -92,7 +92,15 @@ export async function createSupabaseStore(url, anonKey) {
       return check(await sb.from('progress').select('*').eq('student_id', studentId));
     },
     async saveProgress(records) {
-      if (records.length) check(await sb.from('progress').upsert(records));
+      if (!records.length) return;
+      const res = await sb.from('progress').upsert(records);
+      if (res.error && /skipped/.test(res.error.message)) {
+        // Older database without the skip counter: save everything else.
+        console.warn('progress.skipped column missing; run the ALTER TABLE line in supabase/schema.sql');
+        check(await sb.from('progress').upsert(records.map(({ skipped, ...r }) => r)));
+        return;
+      }
+      check(res);
     },
 
     async addActivity(a) { check(await sb.from('activity').insert(a)); },

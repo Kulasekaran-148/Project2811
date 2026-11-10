@@ -236,29 +236,56 @@ export async function runSession(ctx, view, opts) {
           </div>
           <p class="muted" id="save-status">${preview ? 'Preview only, nothing was saved.' : 'Saving…'}</p>
         </div>
-        <div class="foot"><a class="btn primary big" href="${home}">${preview ? 'Back to editor' : 'Continue'}</a></div>
+        <div class="foot">${preview
+          ? `<a class="btn primary big" href="${home}">Back to editor</a>`
+          : `<button class="btn primary big" data-done disabled>Saving…</button>`}</div>
       </div>`;
     if (preview) return;
 
+    // Build everything once, so "Try again" never double-counts.
+    const now = new Date();
+    const records = new Map();
+    for (const [id, ok] of firstTry) records.set(id, grade(byItem.get(id) || newRecord(id, studentId), ok, now));
+    // Skips are counted on the word without changing when it's next due.
+    for (const [id, n] of skipped) {
+      const r = records.get(id) || { ...(byItem.get(id) || newRecord(id, studentId)) };
+      r.skipped = (r.skipped || 0) + n;
+      records.set(id, r);
+    }
+    // Lesson completion goes first: it's what unlocks the next lesson.
+    // Each step is only done once, even if a later one fails and is retried.
+    const steps = [
+      lesson && !d.completedIds.has(lesson.id) && (() => store.completeLesson({ student_id: studentId, lesson_id: lesson.id, score })),
+      () => store.saveProgress([...records.values()]),
+      () => store.addActivity({ student_id: studentId, day: localDay(), xp, kind: lesson ? 'lesson' : 'review', lesson_id: lesson?.id ?? null }),
+    ].filter(Boolean);
+
+    const status = view.querySelector('#save-status');
+    const done = view.querySelector('[data-done]');
+    done.onclick = () => ctx.go(home);
+
     const save = async () => {
-      const status = view.querySelector('#save-status');
+      status.textContent = 'Saving…';
+      done.disabled = true;
+      done.textContent = 'Saving…';
       try {
-        const now = new Date();
-        const records = new Map();
-        for (const [id, ok] of firstTry) records.set(id, grade(byItem.get(id) || newRecord(id, studentId), ok, now));
-        // Skips are counted on the word without changing when it's next due.
-        for (const [id, n] of skipped) {
-          const r = records.get(id) || { ...(byItem.get(id) || newRecord(id, studentId)) };
-          r.skipped = (r.skipped || 0) + n;
-          records.set(id, r);
+        while (steps.length) {
+          await steps[0]();
+          steps.shift();
         }
-        await store.saveProgress([...records.values()]);
-        if (lesson) await store.completeLesson({ student_id: studentId, lesson_id: lesson.id, score });
-        await store.addActivity({ student_id: studentId, day: localDay(), xp, kind: lesson ? 'lesson' : 'review', lesson_id: lesson?.id ?? null });
         status.textContent = 'Progress saved.';
+        done.textContent = 'Continue';
+        done.disabled = false;
+        done.focus();
       } catch (e) {
-        status.innerHTML = `Couldn't save: ${esc(e.message)} <button class="btn sm" data-retry>Try again</button>`;
+        console.error(e);
+        status.innerHTML = `<span class="error">Progress wasn't saved: ${esc(e.message)}</span>
+          <span class="row" style="justify-content:center;margin-top:8px">
+            <button class="btn sm" data-retry>Try again</button>
+            <a class="link small" href="${home}" data-leave>Leave without saving</a>
+          </span>`;
         status.querySelector('[data-retry]').onclick = save;
+        done.textContent = 'Not saved yet';
       }
     };
     save();

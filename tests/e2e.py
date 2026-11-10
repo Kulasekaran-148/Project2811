@@ -47,7 +47,7 @@ def run_session(page, label, answer_well=True):
             if page.locator('.big-word').count() and 'card' not in took: shot(page, f'{label}-card'); took.add('card')
             if 'intro' not in took and page.locator('h1.display').count(): shot(page, f'{label}-intro'); took.add('intro')
             page.click('[data-next]'); continue
-    page.wait_for_selector('#save-status:has-text("saved"), #save-status:has-text("Preview")', timeout=5000)
+    page.wait_for_selector('#save-status:text-is("Progress saved."), #save-status:has-text("Preview")', timeout=5000)
     shot(page, f'{label}-finish')
 
 with sync_playwright() as p:
@@ -102,8 +102,9 @@ with sync_playwright() as p:
     page.click('text=Start lesson')
     run_session(page, 'lesson1')
     assert page.locator('.stats span:has-text("skipped")').count() == 1, 'finish screen shows skips'
-    page.click('.foot a')
+    page.click('.foot [data-done]')
     page.wait_for_selector('.goal')
+    assert page.locator('h1:has-text("Day 2")').count() == 1, 'home moves on to Day 2 after finishing Day 1'
     shot(page, 'student-home-after')
     page.click('#tabs a:has-text("Progress")'); page.wait_for_selector('.words')
     assert page.locator('.words .skips').count() >= 1, 'word list shows skip count'
@@ -115,7 +116,41 @@ with sync_playwright() as p:
     page.click('#tabs a:has-text("Review")'); page.wait_for_selector('.panel h1:has-text("Review")')
     shot(page, 'student-review')
     page.click('.panel .btn'); run_session(page, 'review')
-    page.click('.foot a')
+    page.click('.foot [data-done]')
+
+    # A save that fails once: Continue must wait, and Try again must finish the job.
+    page.goto('http://localhost:8765/?demo#/')
+    page.wait_for_selector('text=Start lesson')
+    page.evaluate("""() => { localStorage.setItem('__failOnce', '1'); }""")
+    page.evaluate("""async () => {
+      const m = await import('/js/store/local.js');
+      const orig = m.localStore.completeLesson.bind(m.localStore);
+      m.localStore.completeLesson = async (c) => {
+        if (localStorage.getItem('__failOnce')) { localStorage.removeItem('__failOnce'); throw new Error('Simulated network error'); }
+        return orig(c);
+      };
+    }""")
+    page.click('text=Start lesson')
+    for _ in range(80):
+        page.wait_for_timeout(80)
+        if page.locator('#save-status').count(): break
+        if page.locator('.foot.fb').count(): page.click('.foot [data-next]'); continue
+        if page.locator('.match').count():
+            for mid in page.eval_on_selector_all('[data-ml]', 'els => els.map(e => e.dataset.ml)'):
+                page.click(f'[data-ml="{mid}"]'); page.click(f'[data-mr="{mid}"]')
+            continue
+        if page.locator('[data-skip]').count(): page.click('[data-skip]'); continue
+        if page.locator('[data-opt]').count(): page.locator('[data-opt]').first.click(); continue
+        if page.locator('[data-next]').count(): page.click('[data-next]'); continue
+    page.wait_for_selector('#save-status:has-text("Simulated network error")')
+    assert page.locator('[data-done]').is_disabled(), 'Continue waits while unsaved'
+    shot(page, 'save-failed')
+    page.click('[data-retry]')
+    page.wait_for_selector('#save-status:text-is("Progress saved.")')
+    assert page.locator('[data-done]').is_enabled()
+    page.click('[data-done]'); page.wait_for_selector('.goal')
+    assert page.locator('text=All caught up').count() == 1, 'both lessons done after retry'
+    print('save-failure path: ok')
 
     # Teacher sees the report
     page.click('.seg [data-role=teacher]'); page.wait_for_selector('text=Your student')
